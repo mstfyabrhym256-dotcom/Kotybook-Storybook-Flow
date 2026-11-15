@@ -13,7 +13,30 @@ class CanvaMCPClient{
   console.log('Canva MCP connected; required tools verified.');
   console.log('Canva generate-image input schema:',JSON.stringify(this.toolSchemas['generate-image']));
  }
- async callTool(name,args={},timeout=120000){if(!this.connected)throw new Error('Canva MCP is not connected.');const r=await this.client.callTool({name,arguments:args},undefined,{timeout});if(r?.isError){const m=(r.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\\n');throw new Error('Canva MCP '+name+' failed: '+(m||'unknown error')+'; inputSchema='+JSON.stringify(this.toolSchemas[name]||{}));}return r;}
+ async callTool(name,args={},timeout=120000){
+  if(!this.connected)throw new Error('Canva MCP is not connected.');
+  const retryable=new Set(['get-generate-image-job','get-assets']);
+  let lastError;
+  for(let attempt=1;attempt<=4;attempt++){
+   try{
+    const r=await this.client.callTool({name,arguments:args},undefined,{timeout});
+    if(r?.isError){
+     const m=(r.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\\n');
+     throw new Error('Canva MCP '+name+' failed: '+(m||'unknown error')+'; inputSchema='+JSON.stringify(this.toolSchemas[name]||{}));
+    }
+    return r;
+   }catch(error){
+    lastError=error;
+    const message=String(error?.message||error).toLowerCase();
+    const transient=/\\b(429|500|502|503|504)\\b|service unavailable|temporarily unavailable|overloaded|rate.?limit|too many requests|econnreset|etimedout|socket hang up|fetch failed/.test(message);
+    if(!retryable.has(name)||!transient||attempt===4)throw error;
+    const delay=[3000,8000,16000][attempt-1];
+    console.warn('Canva '+name+' temporary error; retry '+attempt+'/3 in '+(delay/1000)+'s:',String(error.message||error).slice(0,250));
+    await new Promise(resolve=>setTimeout(resolve,delay));
+   }
+  }
+  throw lastError;
+ }
  async disconnect(){if(this.client)await this.client.close().catch(()=>{});this.client=null;this.transport=null;this.connected=false;}
 }
 module.exports=CanvaMCPClient;
