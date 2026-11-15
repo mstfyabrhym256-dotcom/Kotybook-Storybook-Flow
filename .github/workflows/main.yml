@@ -1,9 +1,7 @@
 name: Kotybook Canva Storybook Worker
+
+# TEMPORARILY PAUSED: manual trigger retained, but all jobs are disabled.
 on:
-  push:
-    branches:
-      - canva-actions-integration
-      - main
   workflow_dispatch:
     inputs:
       code:
@@ -15,88 +13,25 @@ on:
         required: false
         default: false
         type: boolean
+
 permissions:
   contents: read
-concurrency:
-  group: kotybook-story-${{ github.event_name == 'workflow_dispatch' && inputs.code || github.sha }}
-  cancel-in-progress: false
+
 jobs:
   check:
+    if: false
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Check JavaScript syntax
-        run: npm run check
+      - run: echo "Temporarily paused"
+
   canva-design-smoke-test:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_canva_smoke_test
+    if: false
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Test Canva multi-page design and PDF export
-        env:
-          CANVA_CLIENT_INFO_JSON: ${{ secrets.CANVA_CLIENT_INFO_JSON }}
-          CANVA_MCP_AUTH_ARCHIVE_B64: ${{ secrets.CANVA_MCP_AUTH_ARCHIVE_B64 }}
-        run: |
-          if [ -z "$CANVA_CLIENT_INFO_JSON" ] || [ -z "$CANVA_MCP_AUTH_ARCHIVE_B64" ]; then
-            echo "::error::Missing Canva OAuth secrets."
-            exit 1
-          fi
-          mkdir -p "$RUNNER_TEMP/canva-mcp-auth"
-          printf '%s' "$CANVA_MCP_AUTH_ARCHIVE_B64" | base64 --decode | tar -xz -C "$RUNNER_TEMP/canva-mcp-auth"
-          node canva-design-smoke-test.js
-      - name: Upload Canva test PDF
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: kotybook-canva-design-smoke-test
-          path: ${{ runner.temp }}/kotybook-canva-smoke-test.pdf
-          retention-days: 3
+      - run: echo "Temporarily paused"
+
   generate-story:
-    if: github.event_name == 'workflow_dispatch'
-    needs: check
+    if: false
     runs-on: ubuntu-latest
-    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Restore Canva OAuth cache
-        env:
-          CANVA_MCP_AUTH_ARCHIVE_B64: ${{ secrets.CANVA_MCP_AUTH_ARCHIVE_B64 }}
-        run: |
-          if [ -z "$CANVA_MCP_AUTH_ARCHIVE_B64" ]; then
-            echo "::error::Missing CANVA_MCP_AUTH_ARCHIVE_B64 repository secret."
-            exit 1
-          fi
-          mkdir -p "$RUNNER_TEMP/canva-mcp-auth"
-          printf '%s' "$CANVA_MCP_AUTH_ARCHIVE_B64" | base64 --decode | tar -xz -C "$RUNNER_TEMP/canva-mcp-auth"
-          echo "MCP_REMOTE_CONFIG_DIR=$RUNNER_TEMP/canva-mcp-auth" >> "$GITHUB_ENV"
-      - name: Generate story and upload PDF
-        env:
-          ORDER_CODE: ${{ inputs.code }}
-          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
-          API_SECRET: ${{ secrets.API_SECRET }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_MODEL: ${{ vars.GROQ_MODEL }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
-          CANVA_CLIENT_INFO_JSON: ${{ secrets.CANVA_CLIENT_INFO_JSON }}
-        run: node worker.js
+      - run: echo "Temporarily paused"
