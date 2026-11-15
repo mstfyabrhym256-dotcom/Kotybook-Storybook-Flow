@@ -153,15 +153,23 @@ function isTransientCanvaError(error){
 }
 async function generateImage(client,ref,prompt,index,dir){
  let lastError;
- for(let attempt=1;attempt<=4;attempt++){
+ // Canva may briefly return 503 or close the MCP stream. Reconnect before retrying
+ // so retries do not keep using a broken transport.
+ for(let attempt=1;attempt<=5;attempt++){
   try{
-   if(attempt>1)console.log('إعادة محاولة الصورة '+(index+1)+'/11 - محاولة '+attempt+'/4');
+   if(attempt>1)console.log('إعادة محاولة الصورة '+(index+1)+'/11 - محاولة '+attempt+'/5');
    return await generateImageOnce(client,ref,prompt,index,dir);
   }catch(error){
    lastError=error;
-   if(attempt===4||!isTransientCanvaError(error))throw error;
-   const delay=[5000,15000,30000][attempt-1];
-   console.warn('Canva temporary error on image '+(index+1)+': '+String(error.message||error).slice(0,300)+'; retry in '+(delay/1000)+'s');
+   const message=String(error?.message||error);
+   if(attempt===5||!isTransientCanvaError(error)){
+    throw new Error('فشل توليد الصورة '+(index+1)+' بعد '+attempt+' محاولة: '+message);
+   }
+   const delay=[15000,30000,60000,120000][attempt-1];
+   console.warn('Canva temporary error on image '+(index+1)+': '+message.slice(0,300)+'; reconnect and retry in '+(delay/1000)+'s');
+   try{await client.reconnect();}catch(reconnectError){
+    console.warn('Canva reconnect warning:',String(reconnectError?.message||reconnectError).slice(0,250));
+   }
    await sleep(delay);
   }
  }
