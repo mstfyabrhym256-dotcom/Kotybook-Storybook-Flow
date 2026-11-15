@@ -6,7 +6,7 @@
   "main": "worker.js",
   "scripts": {
     "start": "node worker.js",
-    "check": "node --check worker.js && node --check canva-mcp-client.js && node --check pdf-utils.js"
+    "check": "node --check worker.js && node --check canva-mcp-client.js && node --check pdf-utils.js && node --check canva-design-smoke-test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
