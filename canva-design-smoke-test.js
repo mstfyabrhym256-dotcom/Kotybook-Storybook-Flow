@@ -25,6 +25,10 @@ function imageFile(r){
 }
 async function main(){
  const dir=process.env.RUNNER_TEMP||process.cwd();
+ const authCache=path.join(dir,'canva-mcp-auth');
+ if(!fs.existsSync(authCache))throw new Error('Restored Canva OAuth cache is missing: '+authCache);
+ process.env.MCP_REMOTE_CONFIG_DIR=authCache;
+ console.log('CANVA_AUTH_CACHE_DIR:',authCache);
  const refFile=path.join(process.cwd(),'test-reference.jpg');
  if(!fs.existsSync(refFile))throw new Error('test-reference.jpg is missing from the repository.');
  if(!process.env.CANVA_CLIENT_INFO_JSON)throw new Error('CANVA_CLIENT_INFO_JSON is missing.');
