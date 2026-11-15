@@ -37,6 +37,11 @@ class CanvaMCPClient{
   }
   throw lastError;
  }
+ async reconnect(){
+  await this.disconnect();
+  await new Promise(resolve=>setTimeout(resolve,1500));
+  await this.connect();
+ }
  async disconnect(){if(this.client)await this.client.close().catch(()=>{});this.client=null;this.transport=null;this.connected=false;}
 }
 module.exports=CanvaMCPClient;
