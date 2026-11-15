@@ -123,7 +123,7 @@ async function saveMedia(client,id,target,jobResult){
  if(found?.url){const d=await fetch(found.url,{signal:AbortSignal.timeout(120000)});if(!d.ok)throw new Error('تعذر تنزيل صورة Canva: '+d.status);const b=Buffer.from(await d.arrayBuffer());if(b.length<10000)throw new Error('صورة Canva المستلمة صغيرة جدًا.');const p=target.replace(/\.png$/i,/jpe?g/i.test(found.mime)?'.jpg':'.png');fs.writeFileSync(p,b);return p;}
  throw new Error('Canva أعاد MEDIA ID لكن get-assets لم يُرجع بيانات الصورة. ID='+id);
 }
-async function generateImage(client,ref,prompt,index,dir){
+async function generateImageOnce(client,ref,prompt,index,dir){
  // Canva requires user_intent and ContentRef objects for image references.
  // ref is the mediaId returned by create-upload-url; pass it as a MEDIA reference.
  const started=await client.callTool('generate-image',{
@@ -147,6 +147,26 @@ async function generateImage(client,ref,prompt,index,dir){
  if(!media)throw new Error('انتهت مهلة توليد الصورة '+(index+1));
  return saveMedia(client,media,path.join(dir,'page-'+String(index+1).padStart(2,'0')+'.png'),lastJob);
 }
+function isTransientCanvaError(error){
+ const message=String(error?.message||error||'').toLowerCase();
+ return /\\b(429|500|502|503|504)\\b|service unavailable|temporarily unavailable|overloaded|rate.?limit|too many requests|econnreset|econnrefused|etimedout|socket hang up|network error|fetch failed|انتهت مهلة توليد الصورة/.test(message);
+}
+async function generateImage(client,ref,prompt,index,dir){
+ let lastError;
+ for(let attempt=1;attempt<=4;attempt++){
+  try{
+   if(attempt>1)console.log('إعادة محاولة الصورة '+(index+1)+'/11 - محاولة '+attempt+'/4');
+   return await generateImageOnce(client,ref,prompt,index,dir);
+  }catch(error){
+   lastError=error;
+   if(attempt===4||!isTransientCanvaError(error))throw error;
+   const delay=[5000,15000,30000][attempt-1];
+   console.warn('Canva temporary error on image '+(index+1)+': '+String(error.message||error).slice(0,300)+'; retry in '+(delay/1000)+'s');
+   await sleep(delay);
+  }
+ }
+ throw lastError;
+}
 async function uploadPdf(code,file,title){
  const bytes=fs.readFileSync(file),s=await apps('startUpload',{code,fileSize:bytes.length,fileName:safeName(title)+'.pdf'});if(!s.sessionUrl)throw new Error('Apps Script لم يرجع sessionUrl.');
  const r=await fetch(s.sessionUrl,{method:'PUT',headers:{'Content-Type':'application/pdf','Content-Length':String(bytes.length)},body:bytes,signal:AbortSignal.timeout(600000)});const raw=await r.text();if(!r.ok)throw new Error('فشل رفع PDF إلى Drive: '+r.status+' '+raw.slice(0,250));const d=JSON.parse(raw);if(!d.id)throw new Error('Drive لم يرجع file ID.');return apps('completeStory',{code,fileId:d.id,fileName:safeName(title)});
@@ -163,7 +183,7 @@ async function main(){
   const photo=path.join(dir,'reference'+ext);fs.writeFileSync(photo,Buffer.from(job.photoBase64,'base64'));if(fs.statSync(photo).size<1000)throw new Error('صورة العميل تالفة.');
   console.log('2) تأليف قصة من 11 صفحة: غلاف + 10 صفحات داخلية');const story=await createStory(job.meta);const meta={...job.meta,title:story.title};
   console.log('3) الاتصال بـ Canva MCP');client=new CanvaMCPClient();await client.connect();const ref=await uploadReference(client,photo);
-  const images=[];for(let i=0;i<11;i++){console.log('إنشاء الصورة '+(i+1)+'/10');const f=await generateImage(client,ref,promptFor(story.pages[i],meta,story.title,i,story.subtitle),i,dir);if(!fs.existsSync(f)||fs.statSync(f).size<10000)throw new Error('الصورة '+(i+1)+' غير صالحة.');images.push(f);}
+  const images=[];for(let i=0;i<11;i++){console.log('إنشاء الصورة '+(i+1)+'/11');const f=await generateImage(client,ref,promptFor(story.pages[i],meta,story.title,i,story.subtitle),i,dir);if(!fs.existsSync(f)||fs.statSync(f).size<10000)throw new Error('الصورة '+(i+1)+' غير صالحة.');images.push(f);}
   if(images.length!==11)throw new Error('لم يتم إنشاء 11 صورة (غلاف + 10 صفحات).');
   console.log('4) إنشاء PDF');const pdf=path.join(dir,safeName(story.title)+'.pdf');await buildPdfFile(images,pdf,story.title,meta.name);if(!fs.existsSync(pdf)||fs.statSync(pdf).size<50000)throw new Error('PDF الناتج غير صالح.');
   console.log('5) رفع PDF إلى Google Drive');const done=await uploadPdf(CODE,pdf,story.title);console.log('KOTYBOOK STORY COMPLETED:',done.url||'Drive upload complete');
