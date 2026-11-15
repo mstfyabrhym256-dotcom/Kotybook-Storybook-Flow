@@ -70,7 +70,8 @@ async function generateImage(client,ref,prompt,index,dir){
  const started=await client.callTool('generate-image',{
   prompt,
   user_intent:'Create a personalized illustrated children storybook using the uploaded child photo as the visual reference.',
-  imageReferences:[{type:'MEDIA',id:ref}]
+  imageReferences:[{type:'MEDIA',id:ref}],
+  aspectRatio:'PORTRAIT_3_4'
  },120000);
  const id=value(started,'jobId');if(!id)throw new Error('Canva لم يرجع jobId للصورة '+(index+1));
  const deadline=Date.now()+8*60*1000;let media=null,lastJob=null;
