@@ -4,8 +4,8 @@ const path=require('node:path');
 const {Client}=require('@modelcontextprotocol/sdk/client/index.js');
 const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-function objs(r){const a=[];if(r?.structuredContent)a.push(r.structuredContent);for(const c of r?.content||[])if(c.type==='text'&&c.text){try{a.push(JSON.parse(c.text))}catch{}}const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)a.push(m.result);return a;}
-function get(r,k){for(const o of objs(r)){if(o[k]!==undefined)return o[k];if(o.result?.[k]!==undefined)return o.result[k];if(o.job?.[k]!==undefined)return o.job[k];}return undefined;}
+function objs(r){const roots=[];if(r?.structuredContent)roots.push(r.structuredContent);for(const c of r?.content||[])if(c.type==='text'&&c.text){try{roots.push(JSON.parse(c.text))}catch{}}const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)roots.push(m.result);const out=[],seen=new Set();function walk(o,d=0){if(!o||typeof o!=='object'||seen.has(o)||d>8)return;seen.add(o);out.push(o);for(const k of ['result','job','data','response','output'])if(o[k]&&typeof o[k]==='object')walk(o[k],d+1);}for(const o of roots)walk(o);return out;}
+function get(r,k){for(const o of objs(r))if(o[k]!==undefined)return o[k];return undefined;}
 async function main(){
  const auth=path.join(process.env.RUNNER_TEMP,'canva-design-test-client.json');
  fs.writeFileSync(auth,process.env.CANVA_CLIENT_INFO_JSON,{mode:0o600});
@@ -65,8 +65,11 @@ async function main(){
   console.log('EXPORT_TOOL_SCHEMA:',JSON.stringify(tools.find(t=>t.name==='export-design').inputSchema));
   if(!(get(formats,'formats')||{}).pdf)throw new Error('Canva design does not support PDF export.');
   const exp=await client.callTool({name:'export-design',arguments:{design_id:design.id,format:'pdf'}},undefined,{timeout:120000});
-  const urls=get(exp,'urls')||get(exp,'job')?.urls||[];
-  if(!urls.length)throw new Error('PDF export returned no download URL. RAW_RESULT='+JSON.stringify(exp).slice(0,10000));
+  const exportJob=get(exp,'job')||{};
+  const exportStatus=get(exportJob,'status')||get(exp,'status')||'unknown';
+  const urls=get(exportJob,'urls')||get(exp,'urls')||[];
+  console.log('EXPORT_JOB:',JSON.stringify({id:get(exportJob,'id'),status:exportStatus,urlCount:urls.length,error:get(exportJob,'error')}));
+  if(!urls.length)throw new Error('PDF export returned no download URL. Export status='+exportStatus+'. RAW_RESULT='+JSON.stringify(objs(exp)).slice(0,10000));
   const response=await fetch(urls[0],{signal:AbortSignal.timeout(180000)});
   if(!response.ok)throw new Error('PDF download failed: '+response.status);
   const bytes=Buffer.from(await response.arrayBuffer());
