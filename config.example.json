@@ -1,0 +1,11 @@
+{
+  "APPS_SCRIPT_URL": "ضع_رابط_Web_App_الخاص_بـ_Google_Apps_Script",
+  "API_SECRET": "ضع_نفس_API_SECRET_الموجود_في_Apps_Script",
+  "GEMINI_API_KEY": "ضع_Gemini_API_Key",
+  "GEMINI_MODEL": "gemini-3.6-flash",
+  "AUTH_STATE_PATH": "auth.json",
+  "PORT": 3000,
+  "PUBLIC_URL": "https://ضع-رابط-ngrok-او-Cloudflare-Tunnel",
+  "GAP_MS": 30000,
+  "MAX_UPLOAD_MB": 15
+}

@@ -1,0 +1,93 @@
+
+node_modules/
+
+# Credentials and secrets
+auth.json
+canva-auth.json
+canva-client-info.json
+config.json
+.env
+
+# Runtime data
+queue.json
+queue.json.tmp
+out/
+tmp/
+*.log
+error.png
+flow-info.json
+flow-run.json
+proj-info.json
+
+# Canva local sessions
+canva-browser-session/
+canva-chrome-profile/
+
+# Local diagnostics and generated files
+canva-worker/diagnostics/
+canva-worker/inbox/
+canva-worker/output/
+canva-worker/done/
+canva-worker/failed/
+
+# Backups
+*.backup.js
+*.backup2.js
+.DS_Store
+Thumbs.db
+*.pem
+*.key
+*.crt
+credentials.json
+token.json
+secrets.json
+.env.*
+# Test images and generated results
+test-reference.jpg
+*-result.json
+*-results.json
+*-generated.json
+*-result*.json
+
+# Generated documents and archives
+*.pdf
+*.zip
+
+# Local test data
+rahma-story.json
+# Canva worker runtime and customer data
+canva-worker/diagnostics/
+canva-worker/done/
+canva-worker/failed/
+canva-worker/inbox/
+canva-worker/output/
+
+# Worker backups and shortcuts
+canva-worker/*.backup.js
+canva-worker/*.backup2.js
+canva-worker/*.lnk
+inspect-canva-ai.jstest-create-story.js
+setTimeout(resolve
+canva-worker/examples/example-two-page-story.json
+/type
+# All Canva worker customer data and diagnostics
+canva-worker/diagnostics/
+canva-worker/inbox/
+canva-worker/output/
+canva-worker/done/
+canva-worker/failed/
+canva-worker/*.lnk
+canva-worker/*.backup.js
+canva-worker/*.backup2.js
+test-upload-result.json
+test-reference-generation.js
+test-create-story.js
+test-canva-client.js
+test-amr-consistency.js
+inspect-canva-upload.js
+inspect-export-design.js
+inspect-export-tool.js
+inspect-pages-tool.js
+inspect-upload-menu.js
+download-story-pdf.js
+export-new-story.js

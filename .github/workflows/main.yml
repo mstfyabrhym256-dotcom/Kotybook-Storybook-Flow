@@ -1,0 +1,25 @@
+name: Kotybook Flow Project Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Test Chromium launch
+        run: node -e "const {chromium}=require('playwright'); (async()=>{const b=await chromium.launch({headless:true}); console.log('Chromium launch OK'); await b.close()})().catch(e=>{console.error(e);process.exit(1)})"
