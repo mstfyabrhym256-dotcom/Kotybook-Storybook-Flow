@@ -1,14 +1,20 @@
-name: Kotybook Flow Project Check
-
+name: Kotybook Canva Storybook Worker
 on:
   workflow_dispatch:
-  push:
-    branches: [main, master]
-
+    inputs:
+      code:
+        description: Kotybook order code
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: kotybook-story-\${{ inputs.code }}
+  cancel-in-progress: false
 jobs:
-  check:
+  generate-story:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,9 +23,25 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Check JavaScript syntax
-        run: npm run check
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Test Chromium launch
-        run: node -e "const {chromium}=require('playwright'); (async()=>{const b=await chromium.launch({headless:true}); console.log('Chromium launch OK'); await b.close()})().catch(e=>{console.error(e);process.exit(1)})"
+      - name: Restore Canva OAuth cache
+        env:
+          CANVA_MCP_AUTH_ARCHIVE_B64: \${{ secrets.CANVA_MCP_AUTH_ARCHIVE_B64 }}
+        run: |
+          if [ -z "$CANVA_MCP_AUTH_ARCHIVE_B64" ]; then
+            echo "::error::Missing CANVA_MCP_AUTH_ARCHIVE_B64 repository secret."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/canva-mcp-auth"
+          printf '%s' "$CANVA_MCP_AUTH_ARCHIVE_B64" | base64 --decode | tar -xz -C "$RUNNER_TEMP/canva-mcp-auth"
+          echo "MCP_REMOTE_CONFIG_DIR=$RUNNER_TEMP/canva-mcp-auth" >> "$GITHUB_ENV"
+      - name: Generate story and upload PDF
+        env:
+          ORDER_CODE: \${{ inputs.code }}
+          APPS_SCRIPT_URL: \${{ secrets.APPS_SCRIPT_URL }}
+          API_SECRET: \${{ secrets.API_SECRET }}
+          GROQ_API_KEY: \${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+          GROQ_MODEL: \${{ vars.GROQ_MODEL }}
+          GEMINI_MODEL: \${{ vars.GEMINI_MODEL }}
+          CANVA_CLIENT_INFO_JSON: \${{ secrets.CANVA_CLIENT_INFO_JSON }}
+        run: node worker.js
