@@ -65,9 +65,13 @@ async function saveMedia(client,id,target,jobResult){
  throw new Error('Canva أعاد MEDIA ID لكن get-assets لم يُرجع بيانات الصورة. ID='+id);
 }
 async function generateImage(client,ref,prompt,index,dir){
- // Canva's current generate-image schema accepts prompt and optional imageReferences.
- // Aspect ratio is intentionally omitted: it is not a supported argument in the MCP tool schema.
- const started=await client.callTool('generate-image',{prompt,imageReferences:[ref]},120000);
+ // Canva requires user_intent and ContentRef objects for image references.
+ // ref is the mediaId returned by create-upload-url; pass it as a MEDIA reference.
+ const started=await client.callTool('generate-image',{
+  prompt,
+  user_intent:'Create a personalized illustrated children storybook using the uploaded child photo as the visual reference.',
+  imageReferences:[{type:'MEDIA',id:ref}]
+ },120000);
  const id=value(started,'jobId');if(!id)throw new Error('Canva لم يرجع jobId للصورة '+(index+1));
  const deadline=Date.now()+8*60*1000;let media=null,lastJob=null;
  while(Date.now()<deadline){
