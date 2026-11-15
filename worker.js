@@ -12,7 +12,7 @@ async function apps(action,payload={}){
  const raw=await r.text();let d;try{d=JSON.parse(raw)}catch{throw new Error('Apps Script رد غير مفهوم: '+raw.slice(0,250))}
  if(!r.ok||d.ok!==true)throw new Error(d.error||d.message||('Apps Script HTTP '+r.status));return d;
 }
-const STORYBOOK_RULES = \`
+const STORYBOOK_RULES = `
 Create a complete premium personalized children's storybook with exactly 11 pages:
 one artistic typographic front cover plus 10 distinct narrative pages. Portrait 3:4,
 flat full-bleed artwork, no borders, frames, mockups or digital UI.
@@ -58,7 +58,7 @@ OUTPUT: Return valid JSON only, no markdown fences:
 ]}
 The pages array MUST contain exactly 11 objects: index 0 cover, indices 1-10 interior pages.
 Every scene description must specify composition, action, environment and any activity details.
-\`;
+`;
 
 function storyPrompt(m){
  return STORYBOOK_RULES + "\n\nCHILD DETAILS:\nName: "+m.name+
