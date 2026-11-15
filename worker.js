@@ -149,7 +149,7 @@ async function generateImageOnce(client,ref,prompt,index,dir){
 }
 function isTransientCanvaError(error){
  const message=String(error?.message||error||'').toLowerCase();
- return /\\b(429|500|502|503|504)\\b|service unavailable|temporarily unavailable|overloaded|rate.?limit|too many requests|econnreset|econnrefused|etimedout|socket hang up|network error|fetch failed|انتهت مهلة توليد الصورة/.test(message);
+ return /\b(429|500|502|503|504)\b|service unavailable|temporarily unavailable|overloaded|rate.?limit|too many requests|econnreset|econnrefused|etimedout|socket hang up|network error|fetch failed|انتهت مهلة توليد الصورة/.test(message);
 }
 async function generateImage(client,ref,prompt,index,dir){
  let lastError;
