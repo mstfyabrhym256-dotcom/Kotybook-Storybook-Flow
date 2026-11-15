@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - canva-actions-integration
+      - mstfyabrhym256-dotcom-patch-1
       - main
   workflow_dispatch:
     inputs:
