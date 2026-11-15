@@ -1,5 +1,8 @@
 name: Kotybook Canva Storybook Worker
 on:
+  push:
+    branches:
+      - canva-actions-integration
   workflow_dispatch:
     inputs:
       code:
@@ -9,10 +12,25 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: kotybook-story-\${{ inputs.code }}
+  group: kotybook-story-\${{ github.event_name == 'workflow_dispatch' && inputs.code || github.sha }}
   cancel-in-progress: false
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript syntax
+        run: npm run check
   generate-story:
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
