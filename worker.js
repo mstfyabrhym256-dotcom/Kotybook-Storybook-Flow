@@ -12,13 +12,71 @@ async function apps(action,payload={}){
  const raw=await r.text();let d;try{d=JSON.parse(raw)}catch{throw new Error('Apps Script رد غير مفهوم: '+raw.slice(0,250))}
  if(!r.ok||d.ok!==true)throw new Error(d.error||d.message||('Apps Script HTTP '+r.status));return d;
 }
-function storyPrompt(m){return 'اكتب قصة أطفال عربية شخصية من 10 صفحات بالضبط (غلاف + 9 أحداث). الاسم: '+m.name+'. الحلم: '+m.dream+'. اجعلها مشوقة ودافئة ومتسلسلة وتنتهي بخطوة ملموسة نحو الحلم. كل صفحة داخلية فيها scene وصف بصري بالإنجليزية و text عربي بسيط لا يزيد عن 35 كلمة. الغلاف cover=true وtext فارغ، والباقي cover=false. أعد JSON فقط بالشكل {"title":"عنوان","pages":[{"scene":"visual scene in English","text":"نص عربي","cover":true}]}';}
-function validateStory(s,m){
- if(!s||!Array.isArray(s.pages)||s.pages.length!==10)throw new Error('القصة يجب أن تحتوي على 10 صفحات بالضبط.');
- s.pages=s.pages.map((p,i)=>({scene:String(p.scene||'').trim(),text:i?String(p.text||'').trim():'',cover:i===0}));
- if(s.pages.slice(1).some(p=>!p.scene||!p.text))throw new Error('صفحة قصة ناقصة الوصف أو النص.');
- s.title=String(s.title||('رحلة '+m.name+' نحو حلمه')).slice(0,100);return s;
+const STORYBOOK_RULES = \`
+Create a complete premium personalized children's storybook with exactly 11 pages:
+one artistic typographic front cover plus 10 distinct narrative pages. Portrait 3:4,
+flat full-bleed artwork, no borders, frames, mockups or digital UI.
+
+PERSONALIZATION: Use the child's name, age, gender and dream. Invent an original,
+coherent, age-appropriate adventure that progressively moves the child toward that dream.
+"Amr the Doctor" is only an example, never fixed content. Adapt setting, outfit, props,
+supporting characters and events to the actual dream. Never assume every child wants to be a doctor.
+
+NARRATIVE: Exactly 10 interior pages. All interior text MUST be simple Egyptian colloquial
+Arabic for children (العامية المصرية البسيطة), never Modern Standard Arabic. Each interior
+page must contain 20-30 words. Include a beginning, escalating adventure, challenge,
+helpful action, resolution and uplifting ending. Include two story-integrated visual activities:
+one clear counting game and one finger-trace maze/dotted path. Label endpoints exactly
+"البداية" and "النهاية". Activities must be visually unambiguous and must not replace the story.
+
+PAGE PLAN: Cover; dream/calling; arrival at dream-related place; counting activity; first task;
+urgent challenge; skillful helpful action; maze activity; overcome bigger obstacle; warm solution;
+hero's return/celebration with a concrete hopeful step toward the dream.
+
+PREMIUM HIGH-END GRAPHICS: Exceptional professional art direction, cinematic lighting,
+rich fine detail, refined color harmony, realistic materials, depth, clean composition and
+print-quality finish. Environments can be richly stylized toy-like 3D animated worlds,
+but the child must remain photorealistic and lifelike, absolutely NO cartoon/3D/illustration
+filters on the child. Use the exact uploaded reference photo on every page; preserve same face,
+facial geometry, skin tone, hairstyle and identity. Never redesign the child. Natural expressive
+body language and believable interaction. Keep outfit appropriate to the dream and consistent.
+
+TYPOGRAPHY: Cover title and subtitle at top center in custom-drawn artistic Arabic lettering,
+playful interlocking dimensional letters, glossy/glowing outlines, with tiny dream-related
+symbols woven into the lettering. Interior paragraphs in rounded friendly readable Arabic
+children's font, high contrast, placed in natural open space at top or bottom. Only a very soft
+feathered defocus directly behind letters; no boxes, borders or hard rectangular edges.
+Correct connected RTL Arabic, spelling and punctuation. No extra text or English.
+
+BRAND: On EVERY page, bottom-left, render the exact tiny subtle clean white watermark
+with faint drop shadow: "kotybook 01276626592". No other logo, watermark or page number.
+
+OUTPUT: Return valid JSON only, no markdown fences:
+{"title":"Arabic title","subtitle":"Arabic subtitle","pages":[
+{"scene":"detailed visual scene in English","text":"","cover":true},
+{"scene":"detailed visual scene in English","text":"20-30 Egyptian colloquial Arabic words","cover":false}
+]}
+The pages array MUST contain exactly 11 objects: index 0 cover, indices 1-10 interior pages.
+Every scene description must specify composition, action, environment and any activity details.
+\`;
+
+function storyPrompt(m){
+ return STORYBOOK_RULES + "\n\nCHILD DETAILS:\nName: "+m.name+
+ "\nAge: "+m.age+"\nGender: "+m.gender+"\nDream: "+m.dream+
+ "\nCreate an original story specifically for this child.";
 }
+function wordCount(text){return String(text||"").trim().split(/\s+/).filter(Boolean).length;}
+function validateStory(s,m){
+ if(!s||!Array.isArray(s.pages)||s.pages.length!==11)
+  throw new Error("القصة يجب أن تحتوي على غلاف و10 صفحات داخلية (11 صفحة إجمالًا).");
+ s.pages=s.pages.map((p,i)=>({scene:String(p.scene||"").trim(),text:i===0?"":String(p.text||"").trim(),cover:i===0}));
+ if(s.pages.some((p,i)=>!p.scene||(i>0&&(!p.text||wordCount(p.text)<20||wordCount(p.text)>30))))
+  throw new Error("كل صفحة داخلية لازم تحتوي على وصف و20 إلى 30 كلمة بالعامية المصرية.");
+ s.title=String(s.title||("رحلة "+m.name+" نحو حلمه")).slice(0,100);
+ s.subtitle=String(s.subtitle||"حكاية بطل بيحقق حلمه").slice(0,100);
+ return s;
+}
+
 async function createStory(m){
  const prompt=storyPrompt(m);let last;
  if(process.env.GROQ_API_KEY){
@@ -36,9 +94,10 @@ async function createStory(m){
  }
  throw new Error('فشل تأليف القصة: '+(last?.message||'أضف GROQ_API_KEY أو GEMINI_API_KEY.'));
 }
-function promptFor(p,m,title,i){
- const common='Create one premium professionally art-directed Arabic children storybook page, portrait 3:4, full bleed. Use the uploaded reference photo as the identity source; preserve the same recognizable child, facial features, skin tone and hairstyle on every page. High-end cinematic children-book illustration, coherent character design, beautiful lighting, rich tasteful colors, polished composition. Arabic must be accurate RTL with connected letters, no spelling errors, legible elegant typography and safe margins. No mockup, no watermark, no logo, no page number, no English text, no extra text.';
- return common+(i===0?' FRONT COVER. Exact Arabic title: «'+title+'». Also show «حكاية '+m.name+'». Make title prominent and beautifully integrated.':' INTERIOR PAGE. Scene: '+p.scene+'. Render this exact Arabic story text: «'+p.text+'». Do not omit or change words.');
+function promptFor(p,m,title,i,subtitle){
+ const common='Premium high-end professionally art-directed personalized children storybook artwork. Portrait 3:4, flat full-bleed, no borders, frames, mockups or UI. Use the uploaded reference photo as the exact identity source; preserve the same photorealistic lifelike child face, facial geometry, skin tone and hairstyle. Absolutely no cartoon/3D/illustration filters on the child. Rich cinematic stylized 3D toy-like environments, exceptional detail, natural lighting, refined colors, polished print-quality composition. Keep dream-appropriate outfit and identity consistent. Accurate connected RTL Arabic, no spelling errors. Include exact subtle white bottom-left watermark with faint shadow: "kotybook 01276626592". No other logos, page numbers, watermarks or English text.';
+ if(i===0)return common+' FRONT COVER. Action-packed artistic cover. At top center render exact Arabic title «'+title+'» and subtitle «'+subtitle+'» as custom-drawn playful interlocking dimensional Arabic lettering with glossy glowing outlines and tiny dream-related symbols. Scene: '+p.scene+'.';
+ return common+' INTERIOR PAGE '+i+' of 10. Scene: '+p.scene+'. Render this exact Egyptian colloquial Arabic paragraph (20-30 words), letter-for-letter, no additions or omissions: «'+p.text+'». Place in natural open space at top or bottom in a rounded friendly Arabic children font, high contrast, with only soft feathered defocus behind letters; no text box or border. If activity page, make countable objects/path clear and label endpoints exactly «البداية» and «النهاية».';
 }
 function textObjects(r){
  const out=[];if(r?.structuredContent)out.push(r.structuredContent);for(const c of r?.content||[]){if(c.type==='text'&&c.text){try{out.push(JSON.parse(c.text))}catch{}}}
@@ -102,10 +161,10 @@ async function main(){
   console.log('1) جلب الطلب والصورة من Apps Script');const job=await apps('getJob',{code:CODE});if(!job.meta||!job.photoBase64)throw new Error('بيانات الطلب أو الصورة ناقصة.');
   const mime=String(job.photoMime||'image/jpeg').toLowerCase(),ext=({'image/jpeg':'.jpg','image/jpg':'.jpg','image/png':'.png','image/webp':'.webp'})[mime];if(!ext)throw new Error('صيغة صورة غير مدعومة: '+mime);
   const photo=path.join(dir,'reference'+ext);fs.writeFileSync(photo,Buffer.from(job.photoBase64,'base64'));if(fs.statSync(photo).size<1000)throw new Error('صورة العميل تالفة.');
-  console.log('2) تأليف قصة من 10 صفحات');const story=await createStory(job.meta);const meta={...job.meta,title:story.title};
+  console.log('2) تأليف قصة من 11 صفحة: غلاف + 10 صفحات داخلية');const story=await createStory(job.meta);const meta={...job.meta,title:story.title};
   console.log('3) الاتصال بـ Canva MCP');client=new CanvaMCPClient();await client.connect();const ref=await uploadReference(client,photo);
-  const images=[];for(let i=0;i<10;i++){console.log('إنشاء الصورة '+(i+1)+'/10');const f=await generateImage(client,ref,promptFor(story.pages[i],meta,story.title,i),i,dir);if(!fs.existsSync(f)||fs.statSync(f).size<10000)throw new Error('الصورة '+(i+1)+' غير صالحة.');images.push(f);}
-  if(images.length!==10)throw new Error('لم يتم إنشاء 10 صور.');
+  const images=[];for(let i=0;i<11;i++){console.log('إنشاء الصورة '+(i+1)+'/10');const f=await generateImage(client,ref,promptFor(story.pages[i],meta,story.title,i,story.subtitle),i,dir);if(!fs.existsSync(f)||fs.statSync(f).size<10000)throw new Error('الصورة '+(i+1)+' غير صالحة.');images.push(f);}
+  if(images.length!==11)throw new Error('لم يتم إنشاء 11 صورة (غلاف + 10 صفحات).');
   console.log('4) إنشاء PDF');const pdf=path.join(dir,safeName(story.title)+'.pdf');await buildPdfFile(images,pdf,story.title,meta.name);if(!fs.existsSync(pdf)||fs.statSync(pdf).size<50000)throw new Error('PDF الناتج غير صالح.');
   console.log('5) رفع PDF إلى Google Drive');const done=await uploadPdf(CODE,pdf,story.title);console.log('KOTYBOOK STORY COMPLETED:',done.url||'Drive upload complete');
  }catch(e){console.error('KOTYBOOK STORY FAILED:',e.stack||e.message);try{await apps('failStory',{code:CODE,error:String(e.message||e).slice(0,500)});}catch(x){console.error('تعذر تسجيل الفشل في Sheets:',x.message);}throw e;
