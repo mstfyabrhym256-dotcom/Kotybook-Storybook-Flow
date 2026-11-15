@@ -6,6 +6,21 @@ const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js'
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function objs(r){const roots=[];if(r?.structuredContent)roots.push(r.structuredContent);for(const c of r?.content||[])if(c.type==='text'&&c.text){try{roots.push(JSON.parse(c.text))}catch{}}const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)roots.push(m.result);const out=[],seen=new Set();function walk(o,d=0){if(!o||typeof o!=='object'||seen.has(o)||d>8)return;seen.add(o);out.push(o);for(const k of ['result','job','data','response','output'])if(o[k]&&typeof o[k]==='object')walk(o[k],d+1);}for(const o of roots)walk(o);return out;}
 function get(r,k){for(const o of objs(r))if(o[k]!==undefined)return o[k];return undefined;}
+async function safeCall(client,name,args,timeout=120000){
+ let last;
+ for(let attempt=1;attempt<=4;attempt++){
+  try{return await client.callTool({name,arguments:args},undefined,{timeout});}
+  catch(error){
+   last=error;const message=String(error?.message||error).toLowerCase();
+   const transient=/\\b(429|500|502|503|504)\\b|service unavailable|temporarily unavailable|overloaded|rate.?limit|too many requests|econnreset|etimedout|socket hang up|fetch failed/.test(message);
+   if(!transient||attempt===4)throw error;
+   const delay=[3000,8000,16000][attempt-1];
+   console.warn('Canva '+name+' temporary error; retry '+attempt+'/3 in '+(delay/1000)+'s');
+   await sleep(delay);
+  }
+ }
+ throw last;
+}
 async function main(){
  const auth=path.join(process.env.RUNNER_TEMP,'canva-design-test-client.json');
  fs.writeFileSync(auth,process.env.CANVA_CLIENT_INFO_JSON,{mode:0o600});
@@ -47,7 +62,7 @@ async function main(){
    if(status==='failed'||status==='error')throw new Error('Canva create-design failed: '+JSON.stringify(objs(r)).slice(0,2500));
    const wait=get(r,'polling_policy')?.wait_seconds||15;
    await sleep(Math.max(15000,wait*1000));
-   r=await client.callTool({name:'get-create-design-async-job',arguments:{job_id:jobId,continuation_token:token}},undefined,{timeout:120000});
+   r=await safeCall(client,'get-create-design-async-job',{job_id:jobId,continuation_token:token},120000);
    status=get(r,'status');token=get(r,'continuation_token');
    console.log('CREATE_STATUS:',status);
    if(status==='completed'){design=get(r,'design');break;}
