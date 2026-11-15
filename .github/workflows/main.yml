@@ -1,5 +1,8 @@
 name: Kotybook Canva Storybook Worker
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - canva-actions-integration
