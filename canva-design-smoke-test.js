@@ -6,6 +6,7 @@ const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js'
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function objs(r){const roots=[];if(r?.structuredContent)roots.push(r.structuredContent);for(const c of r?.content||[])if(c.type==='text'&&c.text){try{roots.push(JSON.parse(c.text))}catch{}}const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)roots.push(m.result);const out=[],seen=new Set();function walk(o,d=0){if(!o||typeof o!=='object'||seen.has(o)||d>8)return;seen.add(o);out.push(o);for(const k of ['result','job','data','response','output'])if(o[k]&&typeof o[k]==='object')walk(o[k],d+1);}for(const o of roots)walk(o);return out;}
 function get(r,k){for(const o of objs(r))if(o[k]!==undefined)return o[k];return undefined;}
+async function retryCall(fn,label){let last;for(let i=0;i<5;i++){try{return await fn();}catch(e){last=e;const msg=String(e?.message||e);if(!/\\b(429|500|502|503|504)\\b|Service Unavailable|ECONNRESET|ETIMEDOUT|fetch failed/i.test(msg)||i===4)throw e;const ms=Math.min(30000,3000*Math.pow(2,i));console.warn('Temporary Canva error during '+label+'; retry '+(i+1)+'/4 in '+ms+'ms');await sleep(ms);}}throw last;}
 async function main(){
  const auth=path.join(process.env.RUNNER_TEMP,'canva-design-test-client.json');
  fs.writeFileSync(auth,process.env.CANVA_CLIENT_INFO_JSON,{mode:0o600});
@@ -37,7 +38,7 @@ async function main(){
    'Page 11: عمرو returns as a hero; celebration in the hospital garden.',
    'Preserve this exact 11-page sequence. Do not merge pages. No mockup, no outer border, no page furniture.'
   ].join('\n');
-  let r=await client.callTool({name:'create-design',arguments:{brief}},undefined,{timeout:120000});
+  let r=await client.callTool({name:'create-design',arguments:{brief,user_intent:'Create a sample multi-page children storybook to verify Canva design creation and PDF export.'}},undefined,{timeout:120000});
   let jobId=get(r,'job_id'),token=get(r,'continuation_token'),status=get(r,'status');
   if(!jobId)throw new Error('create-design returned no job_id: '+JSON.stringify(objs(r)).slice(0,2500));
   console.log('CREATE_JOB:',jobId,'STATUS:',status);
@@ -47,7 +48,7 @@ async function main(){
    if(status==='failed'||status==='error')throw new Error('Canva create-design failed: '+JSON.stringify(objs(r)).slice(0,2500));
    const wait=get(r,'polling_policy')?.wait_seconds||15;
    await sleep(Math.max(15000,wait*1000));
-   r=await client.callTool({name:'get-create-design-async-job',arguments:{job_id:jobId,continuation_token:token}},undefined,{timeout:120000});
+   r=await retryCall(()=>client.callTool({name:'get-create-design-async-job',arguments:{job_id:jobId,continuation_token:token}},undefined,{timeout:120000}),'design job polling');
    status=get(r,'status');token=get(r,'continuation_token');
    console.log('CREATE_STATUS:',status);
    if(status==='completed'){design=get(r,'design');break;}
