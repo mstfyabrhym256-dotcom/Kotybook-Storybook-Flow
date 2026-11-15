@@ -9,7 +9,11 @@ function get(r,k){for(const o of objs(r)){if(o[k]!==undefined)return o[k];if(o.r
 async function main(){
  const auth=path.join(process.env.RUNNER_TEMP,'canva-design-test-client.json');
  fs.writeFileSync(auth,process.env.CANVA_CLIENT_INFO_JSON,{mode:0o600});
- const transport=new StdioClientTransport({command:'npx',args:['--yes','mcp-remote','https://api.canva.com/connect/v1/mcp','3334','--host','127.0.0.1','--static-oauth-client-info','@'+auth],stderr:'inherit',env:{...process.env}});
+ const mcpConfigDir=path.join(process.env.RUNNER_TEMP||process.env.TEMP||process.cwd(),'canva-mcp-auth');
+ process.env.MCP_REMOTE_CONFIG_DIR=mcpConfigDir;
+ if(!fs.existsSync(mcpConfigDir))throw new Error('Canva OAuth cache directory missing: '+mcpConfigDir);
+ console.log('CANVA_AUTH_CACHE_DIR:',mcpConfigDir);
+ const transport=new StdioClientTransport({command:'npx',args:['--yes','mcp-remote','https://api.canva.com/connect/v1/mcp','3334','--host','127.0.0.1','--static-oauth-client-info','@'+auth],stderr:'inherit',env:{...process.env,MCP_REMOTE_CONFIG_DIR:mcpConfigDir}});
  const client=new Client({name:'kotybook-design-test',version:'1.0.0'});
  try{
   await client.connect(transport);
