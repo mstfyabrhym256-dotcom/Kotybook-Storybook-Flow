@@ -41,7 +41,7 @@ function promptFor(p,m,title,i){
  return common+(i===0?' FRONT COVER. Exact Arabic title: «'+title+'». Also show «حكاية '+m.name+'». Make title prominent and beautifully integrated.':' INTERIOR PAGE. Scene: '+p.scene+'. Render this exact Arabic story text: «'+p.text+'». Do not omit or change words.');
 }
 function textObjects(r){
- const out=[];for(const c of r?.content||[]){if(c.type==='text'&&c.text){try{out.push(JSON.parse(c.text))}catch{}}}
+ const out=[];if(r?.structuredContent)out.push(r.structuredContent);for(const c of r?.content||[]){if(c.type==='text'&&c.text){try{out.push(JSON.parse(c.text))}catch{}}}
  const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)out.push(m.result);return out;
 }
 function value(r,k){for(const o of textObjects(r)){if(o[k]!==undefined)return o[k];if(o.result?.[k]!==undefined)return o.result[k];}return undefined;}
@@ -56,8 +56,10 @@ function imageBlock(r){
  for(const o of textObjects(r))for(const f of (o.files||o.result?.files||[])){if(f.base64||f.data)return {bytes:Buffer.from(f.base64||f.data,'base64'),mime:f.mimeType||'image/png'};if(f.url&&/^https:\/\//i.test(f.url))return {url:f.url,mime:f.mimeType||'image/png'};}
  return null;
 }
-async function saveMedia(client,id,target){
- const r=await client.callTool('get-assets',{asset_ids:[id]},120000);const found=imageBlock(r);
+async function saveMedia(client,id,target,jobResult){
+ // Prefer Canva's PRINT download URL when the MCP app exposes it in job metadata.
+ let found=imageBlock(jobResult);
+ if(!found){const r=await client.callTool('get-assets',{asset_ids:[id]},120000);found=imageBlock(r);}
  if(found?.bytes){const ext=/jpe?g/i.test(found.mime)?'.jpg':'.png',p=target.replace(/\.png$/i,ext);fs.writeFileSync(p,found.bytes);return p;}
  if(found?.url){const d=await fetch(found.url,{signal:AbortSignal.timeout(120000)});if(!d.ok)throw new Error('تعذر تنزيل صورة Canva: '+d.status);const b=Buffer.from(await d.arrayBuffer());if(b.length<10000)throw new Error('صورة Canva المستلمة صغيرة جدًا.');const p=target.replace(/\.png$/i,/jpe?g/i.test(found.mime)?'.jpg':'.png');fs.writeFileSync(p,b);return p;}
  throw new Error('Canva أعاد MEDIA ID لكن get-assets لم يُرجع بيانات الصورة. ID='+id);
@@ -71,7 +73,7 @@ async function generateImage(client,ref,prompt,index,dir){
   if(state==='FAILURE')throw new Error('Canva generation failed: '+(value(s,'failureMessage')||'unknown'));
  }
  if(!media)throw new Error('انتهت مهلة توليد الصورة '+(index+1));
- return saveMedia(client,media,path.join(dir,'page-'+String(index+1).padStart(2,'0')+'.png'));
+ return saveMedia(client,media,path.join(dir,'page-'+String(index+1).padStart(2,'0')+'.png'),s);
 }
 async function uploadPdf(code,file,title){
  const bytes=fs.readFileSync(file),s=await apps('startUpload',{code,fileSize:bytes.length,fileName:safeName(title)+'.pdf'});if(!s.sessionUrl)throw new Error('Apps Script لم يرجع sessionUrl.');
