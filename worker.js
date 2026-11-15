@@ -58,8 +58,8 @@ function imageBlock(r){
 }
 async function saveMedia(client,id,target){
  const r=await client.callTool('get-assets',{asset_ids:[id]},120000);const found=imageBlock(r);
- if(found?.bytes){const ext=/jpe?g/i.test(found.mime)?'.jpg':'.png',p=target.replace(/\\.png$/i,ext);fs.writeFileSync(p,found.bytes);return p;}
- if(found?.url){const d=await fetch(found.url,{signal:AbortSignal.timeout(120000)});if(!d.ok)throw new Error('تعذر تنزيل صورة Canva: '+d.status);const b=Buffer.from(await d.arrayBuffer());if(b.length<10000)throw new Error('صورة Canva المستلمة صغيرة جدًا.');const p=target.replace(/\\.png$/i,/jpe?g/i.test(found.mime)?'.jpg':'.png');fs.writeFileSync(p,b);return p;}
+ if(found?.bytes){const ext=/jpe?g/i.test(found.mime)?'.jpg':'.png',p=target.replace(/\.png$/i,ext);fs.writeFileSync(p,found.bytes);return p;}
+ if(found?.url){const d=await fetch(found.url,{signal:AbortSignal.timeout(120000)});if(!d.ok)throw new Error('تعذر تنزيل صورة Canva: '+d.status);const b=Buffer.from(await d.arrayBuffer());if(b.length<10000)throw new Error('صورة Canva المستلمة صغيرة جدًا.');const p=target.replace(/\.png$/i,/jpe?g/i.test(found.mime)?'.jpg':'.png');fs.writeFileSync(p,b);return p;}
  throw new Error('Canva أعاد MEDIA ID لكن get-assets لم يُرجع بيانات الصورة. ID='+id);
 }
 async function generateImage(client,ref,prompt,index,dir){
