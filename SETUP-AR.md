@@ -1,7 +1,7 @@
 # إعداد التشغيل الفعلي — كوتي بوك
 
 ## 1) دمج الفرع
-الكود موجود في الفرع `canva-actions-integration`. بعد مراجعة التغييرات ودمجها إلى `main`، يصبح Workflow `main.yml` متاحًا لطلبات Apps Script.
+تم دمج التعديلات إلى `main`، وWorkflow `main.yml` موجود الآن على الفرع الافتراضي وجاهز لاستقبال `workflow_dispatch` بعد ضبط الأسرار ونشر Apps Script.
 
 ## 2) إعداد GitHub Secrets
 من المستودع: Settings → Secrets and variables → Actions → New repository secret. أضف:
