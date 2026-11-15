@@ -46,7 +46,7 @@ function textObjects(r){
 }
 function value(r,k){for(const o of textObjects(r)){if(o[k]!==undefined)return o[k];if(o.result?.[k]!==undefined)return o.result[k];}return undefined;}
 async function uploadReference(client,file){
- const ticket=await client.callTool('create-upload-url',{});const url=value(ticket,'uploadUrl');if(!url)throw new Error('Canva لم يرجع uploadUrl.');
+ const ticket=await client.callTool('create-upload-url',{user_intent:'Upload the customer-provided reference photo for identity-consistent personalized storybook image generation.'});const url=value(ticket,'uploadUrl');if(!url)throw new Error('Canva لم يرجع uploadUrl.');
  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:fs.readFileSync(file),signal:AbortSignal.timeout(120000)});
  const raw=await r.text();if(!r.ok)throw new Error('فشل رفع صورة الطفل إلى Canva: '+r.status+' '+raw.slice(0,200));
  const d=JSON.parse(raw);if(!d.mediaId)throw new Error('Canva لم يرجع mediaId للصورة المرجعية.');return d.mediaId;
@@ -70,7 +70,8 @@ async function generateImage(client,ref,prompt,index,dir){
  const started=await client.callTool('generate-image',{
   prompt,
   user_intent:'Create a personalized illustrated children storybook using the uploaded child photo as the visual reference.',
-  imageReferences:[{type:'MEDIA',id:ref}]
+  imageReferences:[{type:'MEDIA',id:ref}],
+  aspectRatio:'PORTRAIT_3_4'
  },120000);
  const id=value(started,'jobId');if(!id)throw new Error('Canva لم يرجع jobId للصورة '+(index+1));
  const deadline=Date.now()+8*60*1000;let media=null,lastJob=null;

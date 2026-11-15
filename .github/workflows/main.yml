@@ -1,8 +1,12 @@
 name: Kotybook Canva Storybook Worker
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - canva-actions-integration
+      - mstfyabrhym256-dotcom-patch-1
       - main
   workflow_dispatch:
     inputs:
@@ -41,7 +45,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Test Canva multi-page design and PDF export
+      - name: Test Canva reference upload, image generation, and PDF creation
         env:
           CANVA_CLIENT_INFO_JSON: ${{ secrets.CANVA_CLIENT_INFO_JSON }}
           CANVA_MCP_AUTH_ARCHIVE_B64: ${{ secrets.CANVA_MCP_AUTH_ARCHIVE_B64 }}
