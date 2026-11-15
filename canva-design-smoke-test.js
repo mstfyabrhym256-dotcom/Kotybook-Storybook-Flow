@@ -6,7 +6,7 @@ const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js'
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function objs(r){const roots=[];if(r?.structuredContent)roots.push(r.structuredContent);for(const c of r?.content||[])if(c.type==='text'&&c.text){try{roots.push(JSON.parse(c.text))}catch{}}const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)roots.push(m.result);const out=[],seen=new Set();function walk(o,d=0){if(!o||typeof o!=='object'||seen.has(o)||d>8)return;seen.add(o);out.push(o);for(const k of ['result','job','data','response','output'])if(o[k]&&typeof o[k]==='object')walk(o[k],d+1);}for(const o of roots)walk(o);return out;}
 function get(r,k){for(const o of objs(r))if(o[k]!==undefined)return o[k];return undefined;}
-async function retryCall(fn,label){let last;for(let i=0;i<5;i++){try{return await fn();}catch(e){last=e;const msg=String(e?.message||e);if(!/\\b(429|500|502|503|504)\\b|Service Unavailable|ECONNRESET|ETIMEDOUT|fetch failed/i.test(msg)||i===4)throw e;const ms=Math.min(30000,3000*Math.pow(2,i));console.warn('Temporary Canva error during '+label+'; retry '+(i+1)+'/4 in '+ms+'ms');await sleep(ms);}}throw last;}
+async function retryCall(fn,label){let last;for(let i=0;i<5;i++){try{return await fn();}catch(e){last=e;const msg=String(e?.message||e);if(!/\b(429|500|502|503|504)\b|Service Unavailable|ECONNRESET|ETIMEDOUT|fetch failed/i.test(msg)||i===4)throw e;const ms=Math.min(30000,3000*Math.pow(2,i));console.warn('Temporary Canva error during '+label+'; retry '+(i+1)+'/4 in '+ms+'ms');await sleep(ms);}}throw last;}
 async function main(){
  const auth=path.join(process.env.RUNNER_TEMP,'canva-design-test-client.json');
  fs.writeFileSync(auth,process.env.CANVA_CLIENT_INFO_JSON,{mode:0o600});
