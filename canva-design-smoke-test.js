@@ -79,7 +79,7 @@ async function main(){
   console.log('EXPORT_FORMATS:',JSON.stringify(get(formats,'formats')||{}));
   console.log('EXPORT_TOOL_SCHEMA:',JSON.stringify(tools.find(t=>t.name==='export-design').inputSchema));
   if(!(get(formats,'formats')||{}).pdf)throw new Error('Canva design does not support PDF export.');
-  const exp=await client.callTool({name:'export-design',arguments:{design_id:design.id,format:'pdf'}},undefined,{timeout:120000});
+  const exp=await client.callTool({name:'export-design',arguments:{design_id:design.id,format:{type:'pdf'},user_intent:'Export the completed 11-page Kotybook storybook as a PDF.'}},undefined,{timeout:120000});\n  console.log('EXPORT_RAW_RESULT:',JSON.stringify(exp).slice(0,12000));
   const exportJob=get(exp,'job')||{};
   const exportStatus=get(exportJob,'status')||get(exp,'status')||'unknown';
   const urls=get(exportJob,'urls')||get(exp,'urls')||[];
