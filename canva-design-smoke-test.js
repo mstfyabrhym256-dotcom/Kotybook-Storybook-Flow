@@ -12,7 +12,7 @@ async function safeCall(client,name,args,timeout=120000){
   try{return await client.callTool({name,arguments:args},undefined,{timeout});}
   catch(error){
    last=error;const message=String(error?.message||error).toLowerCase();
-   const transient=/\\b(429|500|502|503|504)\\b|service unavailable|temporarily unavailable|overloaded|rate.?limit|too many requests|econnreset|etimedout|socket hang up|fetch failed/.test(message);
+   const transient=/\b(429|500|502|503|504)\b|service unavailable|temporarily unavailable|overloaded|rate.?limit|too many requests|econnreset|etimedout|socket hang up|fetch failed/.test(message);
    if(!transient||attempt===4)throw error;
    const delay=[3000,8000,16000][attempt-1];
    console.warn('Canva '+name+' temporary error; retry '+attempt+'/3 in '+(delay/1000)+'s');
