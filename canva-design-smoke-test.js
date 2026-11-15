@@ -62,10 +62,11 @@ async function main(){
   console.log('DESIGN_PAGE_COUNT:',pageCount);
   const formats=await client.callTool({name:'get-export-formats',arguments:{design_id:design.id}},undefined,{timeout:120000});
   console.log('EXPORT_FORMATS:',JSON.stringify(get(formats,'formats')||{}));
+  console.log('EXPORT_TOOL_SCHEMA:',JSON.stringify(tools.find(t=>t.name==='export-design').inputSchema));
   if(!(get(formats,'formats')||{}).pdf)throw new Error('Canva design does not support PDF export.');
   const exp=await client.callTool({name:'export-design',arguments:{design_id:design.id,format:'pdf'}},undefined,{timeout:120000});
   const urls=get(exp,'urls')||get(exp,'job')?.urls||[];
-  if(!urls.length)throw new Error('PDF export returned no download URL: '+JSON.stringify(objs(exp)).slice(0,2500));
+  if(!urls.length)throw new Error('PDF export returned no download URL. RAW_RESULT='+JSON.stringify(exp).slice(0,10000));
   const response=await fetch(urls[0],{signal:AbortSignal.timeout(180000)});
   if(!response.ok)throw new Error('PDF download failed: '+response.status);
   const bytes=Buffer.from(await response.arrayBuffer());
