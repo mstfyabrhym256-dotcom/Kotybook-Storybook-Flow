@@ -1,84 +1,93 @@
 'use strict';
 const fs=require('node:fs');
 const path=require('node:path');
-const {Client}=require('@modelcontextprotocol/sdk/client/index.js');
-const {StdioClientTransport}=require('@modelcontextprotocol/sdk/client/stdio.js');
+const CanvaMCPClient=require('./canva-mcp-client');
+const {buildPdfFile}=require('./pdf-utils');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-function objs(r){const roots=[];if(r?.structuredContent)roots.push(r.structuredContent);for(const c of r?.content||[])if(c.type==='text'&&c.text){try{roots.push(JSON.parse(c.text))}catch{}}const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)roots.push(m.result);const out=[],seen=new Set();function walk(o,d=0){if(!o||typeof o!=='object'||seen.has(o)||d>8)return;seen.add(o);out.push(o);for(const k of ['result','job','data','response','output'])if(o[k]&&typeof o[k]==='object')walk(o[k],d+1);}for(const o of roots)walk(o);return out;}
-function get(r,k){for(const o of objs(r))if(o[k]!==undefined)return o[k];return undefined;}
-async function retryCall(fn,label){let last;for(let i=0;i<5;i++){try{return await fn();}catch(e){last=e;const msg=String(e?.message||e);if(!/\b(429|500|502|503|504)\b|Service Unavailable|ECONNRESET|ETIMEDOUT|fetch failed/i.test(msg)||i===4)throw e;const ms=Math.min(30000,3000*Math.pow(2,i));console.warn('Temporary Canva error during '+label+'; retry '+(i+1)+'/4 in '+ms+'ms');await sleep(ms);}}throw last;}
-async function main(){
- const auth=path.join(process.env.RUNNER_TEMP,'canva-design-test-client.json');
- fs.writeFileSync(auth,process.env.CANVA_CLIENT_INFO_JSON,{mode:0o600});
- const mcpConfigDir=path.join(process.env.RUNNER_TEMP||process.env.TEMP||process.cwd(),'canva-mcp-auth');
- process.env.MCP_REMOTE_CONFIG_DIR=mcpConfigDir;
- if(!fs.existsSync(mcpConfigDir))throw new Error('Canva OAuth cache directory missing: '+mcpConfigDir);
- console.log('CANVA_AUTH_CACHE_DIR:',mcpConfigDir);
- const transport=new StdioClientTransport({command:'npx',args:['--yes','mcp-remote','https://api.canva.com/connect/v1/mcp','3334','--host','127.0.0.1','--static-oauth-client-info','@'+auth],stderr:'inherit',env:{...process.env,MCP_REMOTE_CONFIG_DIR:mcpConfigDir}});
- const client=new Client({name:'kotybook-design-test',version:'1.0.0'});
- try{
-  await client.connect(transport);
-  const listed=await client.listTools(),tools=listed.tools||[];
-  const names=new Set(tools.map(t=>t.name));
-  console.log('CANVA_TOOLS:',[...names].sort().join(','));
-  for(const n of ['create-design','get-create-design-async-job','get-design-pages','get-export-formats','export-design'])if(!names.has(n))throw new Error('Required Canva MCP tool unavailable: '+n);
-  console.log('CREATE_DESIGN_SCHEMA:',JSON.stringify(tools.find(t=>t.name==='create-design').inputSchema));
-  const brief=[
-   'Create a complete 11-page portrait 3:4 Arabic children storybook, not a presentation. Full-bleed pages, premium cinematic Pixar-like 3D toy hospital world, sky blue, white, mint, coral and warm golden light. The main child is a six-year-old Egyptian boy named عمرو, shown as a photorealistic human child (not cartoon face), wearing a white doctor coat, light-blue scrubs, navy trousers and silver/navy stethoscope. Keep the same character identity and outfit on every page. All visible story text must be accurate Egyptian colloquial Arabic, RTL, with connected letters and no English. Each inner page has a short story paragraph of 20–30 Arabic words, integrated in clean open space without text boxes. Tiny bottom-left watermark: kotybook 01276626592.',
-   'Page 1 cover: exact title عمرو الدكتور and subtitle بطل الرحمة, beautiful 3D Arabic typography with medical icons.',
-   'Page 2: عمرو in his bedroom dreaming of becoming a doctor.',
-   'Page 3: arriving at a modern hospital and meeting the medical team.',
-   'Page 4: counting activity: exactly 3 red first-aid kits and 5 bandage boxes.',
-   'Page 5: examination room, checking heartbeat and viewing 3D scans.',
-   'Page 6: emergency call, hospital corridor and ambulance.',
-   'Page 7: treating an injured athlete with a futuristic cast.',
-   'Page 8: interactive maze/tracing activity from البداية to النهاية, passing hearts and vitamins while avoiding germs.',
-   'Page 9: fever crisis, treatment, and monitor turning green.',
-   'Page 10: peaceful recovery and patients thanking عمرو.',
-   'Page 11: عمرو returns as a hero; celebration in the hospital garden.',
-   'Preserve this exact 11-page sequence. Do not merge pages. No mockup, no outer border, no page furniture.'
-  ].join('\n');
-  let r=await client.callTool({name:'create-design',arguments:{brief,user_intent:'Create a sample multi-page children storybook to verify Canva design creation and PDF export.'}},undefined,{timeout:120000});
-  let jobId=get(r,'job_id'),token=get(r,'continuation_token'),status=get(r,'status');
-  if(!jobId)throw new Error('create-design returned no job_id: '+JSON.stringify(objs(r)).slice(0,2500));
-  console.log('CREATE_JOB:',jobId,'STATUS:',status);
-  let design=null,deadline=Date.now()+30*60*1000;
-  while(Date.now()<deadline){
-   if(status==='completed'||status==='success'){design=get(r,'design');break;}
-   if(status==='failed'||status==='error')throw new Error('Canva create-design failed: '+JSON.stringify(objs(r)).slice(0,2500));
-   const wait=get(r,'polling_policy')?.wait_seconds||15;
-   await sleep(Math.max(15000,wait*1000));
-   r=await retryCall(()=>client.callTool({name:'get-create-design-async-job',arguments:{job_id:jobId,continuation_token:token}},undefined,{timeout:120000}),'design job polling');
-   status=get(r,'status');token=get(r,'continuation_token');
-   console.log('CREATE_STATUS:',status);
-   if(status==='completed'){design=get(r,'design');break;}
-   if(status==='failed')throw new Error('Canva create-design failed: '+JSON.stringify(objs(r)).slice(0,2500));
-  }
-  if(!design?.id)throw new Error('Timed out or no design id returned: '+JSON.stringify(objs(r)).slice(0,2500));
-  console.log('DESIGN_CREATED:',JSON.stringify({id:design.id,url:design.url,edit_url:design.edit_url}));
-  let pageCount=null;
-  const pages=await client.callTool({name:'get-design-pages',arguments:{design_id:design.id}},undefined,{timeout:120000});
-  const items=get(pages,'items')||[];
-  pageCount=items.length;
-  console.log('DESIGN_PAGE_COUNT:',pageCount);
-  const formats=await client.callTool({name:'get-export-formats',arguments:{design_id:design.id}},undefined,{timeout:120000});
-  console.log('EXPORT_FORMATS:',JSON.stringify(get(formats,'formats')||{}));
-  console.log('EXPORT_TOOL_SCHEMA:',JSON.stringify(tools.find(t=>t.name==='export-design').inputSchema));
-  if(!(get(formats,'formats')||{}).pdf)throw new Error('Canva design does not support PDF export.');
-  const exp=await client.callTool({name:'export-design',arguments:{design_id:design.id,format:'pdf'}},undefined,{timeout:120000});
-  const exportJob=get(exp,'job')||{};
-  const exportStatus=get(exportJob,'status')||get(exp,'status')||'unknown';
-  const urls=get(exportJob,'urls')||get(exp,'urls')||[];
-  console.log('EXPORT_JOB:',JSON.stringify({id:get(exportJob,'id'),status:exportStatus,urlCount:urls.length,error:get(exportJob,'error')}));
-  if(!urls.length)throw new Error('PDF export returned no download URL. Export status='+exportStatus+'. RAW_RESULT='+JSON.stringify(objs(exp)).slice(0,10000));
-  const response=await fetch(urls[0],{signal:AbortSignal.timeout(180000)});
-  if(!response.ok)throw new Error('PDF download failed: '+response.status);
-  const bytes=Buffer.from(await response.arrayBuffer());
-  if(bytes.length<10000)throw new Error('Downloaded PDF is unexpectedly small: '+bytes.length);
-  fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'kotybook-canva-smoke-test.pdf'),bytes);
-  console.log('PDF_EXPORTED_BYTES:',bytes.length);
-  if(pageCount!==11)throw new Error('Expected 11 pages, Canva returned '+pageCount+'. Design: '+design.url);
-  console.log('CANVA_DESIGN_TEST_PASSED:',design.url);
- }finally{await client.close().catch(()=>{});}
+function roots(r){
+ const out=[];
+ if(r?.structuredContent)out.push(r.structuredContent);
+ for(const c of r?.content||[])if(c.type==='text'&&c.text){try{out.push(JSON.parse(c.text));}catch{}}
+ const m=r?._meta?.['com.canva/mcpAppOutput'];if(m?.result)out.push(m.result);
+ return out;
 }
-main().catch(e=>{console.error('CANVA_DESIGN_TEST_FAILED:',e.stack||e);process.exit(1);});
+function value(r,key){
+ for(const o of roots(r)){if(o[key]!==undefined)return o[key];if(o.result?.[key]!==undefined)return o.result[key];}
+ return undefined;
+}
+function imageFile(r){
+ for(const c of r?.content||[])if(c.type==='image'&&c.data)return {bytes:Buffer.from(c.data,'base64'),mime:c.mimeType||'image/png'};
+ for(const o of roots(r))for(const f of (o.files||o.result?.files||[])){
+  if(f.base64||f.data)return {bytes:Buffer.from(f.base64||f.data,'base64'),mime:f.mimeType||'image/png'};
+  if(f.url&&/^https:\/\//i.test(f.url))return {url:f.url,mime:f.mimeType||'image/png'};
+ }
+ return null;
+}
+async function main(){
+ const dir=process.env.RUNNER_TEMP||process.cwd();
+ const refFile=path.join(process.cwd(),'test-reference.jpg');
+ if(!fs.existsSync(refFile))throw new Error('test-reference.jpg is missing from the repository.');
+ if(!process.env.CANVA_CLIENT_INFO_JSON)throw new Error('CANVA_CLIENT_INFO_JSON is missing.');
+ const auth=path.join(dir,'canva-design-test-client.json');
+ fs.writeFileSync(auth,process.env.CANVA_CLIENT_INFO_JSON,{mode:0o600});
+ process.env.CANVA_CLIENT_INFO_PATH=auth;
+ const client=new CanvaMCPClient();
+ try{
+  console.log('STEP 1: Connect and inspect Canva tools');
+  await client.connect();
+  console.log('GENERATE_IMAGE_SCHEMA:',JSON.stringify(client.toolSchemas['generate-image']));
+  console.log('STEP 2: Request upload URL for the exact reference photo');
+  const ticket=await client.callTool('create-upload-url',{
+   user_intent:'Upload the supplied reference photo to test identity-consistent personalized storybook image generation.'
+  },120000);
+  const uploadUrl=value(ticket,'uploadUrl');
+  if(!uploadUrl)throw new Error('Canva did not return uploadUrl: '+JSON.stringify(roots(ticket)).slice(0,2000));
+  const upload=await fetch(uploadUrl,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:fs.readFileSync(refFile),signal:AbortSignal.timeout(180000)});
+  const uploadText=await upload.text();
+  if(!upload.ok)throw new Error('Reference photo upload failed: HTTP '+upload.status+' '+uploadText.slice(0,300));
+  const uploadData=JSON.parse(uploadText);
+  if(!uploadData.mediaId)throw new Error('Canva upload response has no mediaId: '+uploadText.slice(0,1000));
+  console.log('REFERENCE_UPLOAD_OK: mediaId received; source photo left unchanged.');
+  console.log('STEP 3: Generate one sample page using the uploaded reference');
+  const started=await client.callTool('generate-image',{
+   prompt:'Create one premium portrait 3:4 illustrated children storybook page. Use the attached reference photo as the identity source. Preserve the same child recognizable facial features, skin tone and hairstyle; do not replace the child with a different person. Show the child as a confident young explorer in a magical library, cinematic polished 3D storybook illustration, warm light, beautiful composition. No text, no logo, no watermark, no mockup.',
+   user_intent:'Create one sample personalized storybook illustration while preserving the identity of the uploaded reference child.',
+   imageReferences:[{type:'MEDIA',id:uploadData.mediaId}]
+  },180000);
+  const jobId=value(started,'jobId');
+  if(!jobId)throw new Error('Canva did not return jobId: '+JSON.stringify(roots(started)).slice(0,2000));
+  console.log('IMAGE_JOB_STARTED:',jobId);
+  const deadline=Date.now()+12*60*1000;let mediaId=null,last=null;
+  while(Date.now()<deadline){
+   await sleep(6000);
+   last=await client.callTool('get-generate-image-job',{jobId},120000);
+   const status=value(last,'status');
+   console.log('IMAGE_JOB_STATUS:',status||'unknown');
+   if(status==='SUCCESS'){
+    const results=value(last,'results')||value(last,'result')?.results;
+    mediaId=Array.isArray(results)?results.find(x=>x.type==='MEDIA')?.id:null;
+    mediaId=mediaId||value(last,'mediaId');
+    break;
+   }
+   if(status==='FAILURE')throw new Error('Canva image generation failed: '+(value(last,'failureMessage')||JSON.stringify(roots(last)).slice(0,1500)));
+  }
+  if(!mediaId)throw new Error('Timed out waiting for Canva image generation.');
+  console.log('STEP 4: Download generated image');
+  let found=imageFile(last);
+  if(!found){const assets=await client.callTool('get-assets',{asset_ids:[mediaId]},120000);found=imageFile(assets);}
+  if(!found)throw new Error('Canva returned mediaId but no downloadable image data.');
+  let bytes=found.bytes;
+  if(found.url){const response=await fetch(found.url,{signal:AbortSignal.timeout(180000)});if(!response.ok)throw new Error('Image download failed: HTTP '+response.status);bytes=Buffer.from(await response.arrayBuffer());}
+  if(!bytes||bytes.length<10000)throw new Error('Generated image is empty or unexpectedly small.');
+  const ext=/jpe?g/i.test(found.mime)?'.jpg':'.png';
+  const imagePath=path.join(dir,'kotybook-reference-smoke-test'+ext);
+  fs.writeFileSync(imagePath,bytes);
+  console.log('GENERATED_IMAGE_BYTES:',bytes.length);
+  console.log('STEP 5: Build one-page PDF to validate the final file pipeline');
+  const pdf=path.join(dir,'kotybook-canva-smoke-test.pdf');
+  await buildPdfFile([imagePath],pdf,'Kotybook reference test');
+  if(!fs.existsSync(pdf)||fs.statSync(pdf).size<10000)throw new Error('Smoke-test PDF was not created correctly.');
+  console.log('CANVA_REFERENCE_TEST_PASSED');
+ }finally{await client.disconnect();}
+}
+main().catch(e=>{console.error('CANVA_REFERENCE_TEST_FAILED:',e.stack||e);process.exit(1);});
