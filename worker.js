@@ -65,15 +65,24 @@ async function saveMedia(client,id,target,jobResult){
  throw new Error('Canva أعاد MEDIA ID لكن get-assets لم يُرجع بيانات الصورة. ID='+id);
 }
 async function generateImage(client,ref,prompt,index,dir){
- const started=await client.callTool('generate-image',{prompt,imageReferences:[ref],aspectRatio:'PORTRAIT_3_4'},120000);
+ // Canva's current generate-image schema accepts prompt and optional imageReferences.
+ // Aspect ratio is intentionally omitted: it is not a supported argument in the MCP tool schema.
+ const started=await client.callTool('generate-image',{prompt,imageReferences:[ref]},120000);
  const id=value(started,'jobId');if(!id)throw new Error('Canva لم يرجع jobId للصورة '+(index+1));
- const deadline=Date.now()+8*60*1000;let media=null;
- while(Date.now()<deadline){await sleep(5000);const s=await client.callTool('get-generate-image-job',{jobId:id},120000);const state=value(s,'status');
-  if(state==='SUCCESS'){const res=value(s,'results')||value(s,'result')?.results;media=Array.isArray(res)?res.find(x=>x.type==='MEDIA')?.id:null;media=media||value(s,'mediaId');break;}
-  if(state==='FAILURE')throw new Error('Canva generation failed: '+(value(s,'failureMessage')||'unknown'));
+ const deadline=Date.now()+8*60*1000;let media=null,lastJob=null;
+ while(Date.now()<deadline){
+  await sleep(5000);
+  lastJob=await client.callTool('get-generate-image-job',{jobId:id},120000);
+  const state=value(lastJob,'status');
+  if(state==='SUCCESS'){
+   const res=value(lastJob,'results')||value(lastJob,'result')?.results;
+   media=Array.isArray(res)?res.find(x=>x.type==='MEDIA')?.id:null;
+   media=media||value(lastJob,'mediaId');break;
+  }
+  if(state==='FAILURE')throw new Error('Canva generation failed: '+(value(lastJob,'failureMessage')||'unknown'));
  }
  if(!media)throw new Error('انتهت مهلة توليد الصورة '+(index+1));
- return saveMedia(client,media,path.join(dir,'page-'+String(index+1).padStart(2,'0')+'.png'),s);
+ return saveMedia(client,media,path.join(dir,'page-'+String(index+1).padStart(2,'0')+'.png'),lastJob);
 }
 async function uploadPdf(code,file,title){
  const bytes=fs.readFileSync(file),s=await apps('startUpload',{code,fileSize:bytes.length,fileName:safeName(title)+'.pdf'});if(!s.sessionUrl)throw new Error('Apps Script لم يرجع sessionUrl.');
